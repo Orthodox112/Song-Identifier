@@ -2,7 +2,6 @@ streamlit
 numpy
 scipy
 matplotlib
-python-3.9
 librosa
 soundfile
 audioread
