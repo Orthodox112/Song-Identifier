@@ -20,9 +20,11 @@ st.set_page_config(page_title="EE200 Song Identifier", layout="wide")
 @st.cache_resource
 def load_database():
     db_name = "song_db.pkl"
-    zip_name = os.path.join(base_dir,"song_db.zip")
     base_dir = os.path.dirname(os.path.abspath(__file__))
-
+    zip_name = os.path.join(base_dir,"song_db.zip")
+    st.write("Base directory:", base_dir)
+    st.write("ZIP path:", zip_name)
+    st.write("Current working directory:", os.getcwd())
     # 1. LOCAL TESTING: Try to load the .pkl normally (for when you run on your laptop)
     for root, dirs, files in os.walk(base_dir):
         if db_name in files:
@@ -60,6 +62,7 @@ def load_database():
                     with zip_ref.open(file_inside_zip) as f:
                         data = pickle.load(f)
                         if isinstance(data, dict):
+                            st.write("ZIP exists:", os.path.exists(zip_name))
                             return data, []
     except Exception as e:
         return {}, [f"Extraction Error: {type(e).__name__} - {e}"]
