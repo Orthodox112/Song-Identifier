@@ -19,44 +19,43 @@ st.set_page_config(page_title="EE200 Song Identifier", layout="wide")
 def load_database():
     db_name = "song_db.pkl"
     zip_name = "song_db.zip"
-    
-    # Find the absolute path to the directory containing app.py
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    error_logs = []
 
-    # 1. Search for a valid raw .pkl file (This handles your local testing)
+    # 1. Search for a valid raw .pkl file
     for root, dirs, files in os.walk(base_dir):
         if db_name in files:
             filepath = os.path.join(root, db_name)
             try:
                 with open(filepath, 'rb') as f:
                     data = pickle.load(f)
-                    # Verify it's not a broken LFS pointer
                     if isinstance(data, dict): 
-                        return data
-            except Exception:
-                continue # Ignore broken Git LFS pointers and keep searching
+                        return data, []
+            except Exception as e:
+                # Catch the EXACT reason it failed!
+                error_logs.append(f"PKL File Error: {type(e).__name__} - {e}")
 
-    # 2. Extract directly from Memory (This bypasses the Cloud's Read-Only block!)
+    # 2. Extract directly from Memory
     for root, dirs, files in os.walk(base_dir):
         if zip_name in files:
             zip_path = os.path.join(root, zip_name)
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    # Look inside the zip to find the exact file name and path
                     for file_inside_zip in zip_ref.namelist():
-                        if file_inside_zip.endswith(db_name):
-                            # Read the file directly out of the zip into RAM!
+                        if file_inside_zip.endswith('.pkl'):
                             with zip_ref.open(file_inside_zip) as f:
                                 data = pickle.load(f)
                                 if isinstance(data, dict):
-                                    return data
-            except Exception:
-                continue
+                                    return data, []
+            except Exception as e:
+                # Catch the EXACT reason the zip failed!
+                error_logs.append(f"ZIP File Error: {type(e).__name__} - {e}")
     
-    # 3. FATAL ERROR PREVENTER
-    return {}
+    return {}, error_logs
+
 # Safely initialize the global database
-song_db = load_database()
+song_db, debug_info = load_database()
 if not isinstance(song_db, dict):
     song_db = {}
 # --- Core Functions from Q3.ipynb ---
@@ -257,23 +256,26 @@ def main():
     tab_library, tab_identify, tab_batch = st.tabs(["LIBRARY", "IDENTIFY", "BATCH"])
     
     # --- Phase 3: Building the 'LIBRARY' Tab ---
+
     with tab_library:
         st.header("Indexed Song Library")
         
         if not song_db:
-            st.error("Database is missing! 'song_db.zip' was not found or failed to load.")
+            st.error("🚨 Database failed to load! Here is exactly why:")
             
-            # --- DEBUGGER: See what files are actually on the server ---
-            st.warning("Server File Debugger: Here are the files Streamlit currently sees:")
+            # Print the exact exceptions that caused the crash
+            for err in debug_info:
+                st.warning(err)
+                
+            st.write("---")
+            st.write("**Files currently on the server:**")
             server_files = []
             base_dir = os.path.dirname(os.path.abspath(__file__))
             for root, dirs, files in os.walk(base_dir):
                 for file in files:
-                    # Ignore hidden git/python system files to keep the list clean
                     if ".git" not in root and "__pycache__" not in root:
                         server_files.append(os.path.join(root, file).replace(base_dir, ""))
             st.write(server_files)
-            # -----------------------------------------------------------
         else:
             # Calculate the total number of hashes for each song in the database
             song_hash_counts = {}
@@ -295,6 +297,7 @@ def main():
                         else:
                             st.caption("Visual footprint unavailable.")
                 col_idx += 1
+                
     # --- Phase 4: Building the 'IDENTIFY' Tab --
     with tab_identify:
         st.header("Audio Fingerprinting Engine")
