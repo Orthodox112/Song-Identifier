@@ -43,8 +43,12 @@ def load_database():
         # This downloads the file to the Streamlit server
         r = requests.get(url)
         r.raise_for_status()
-        with open(zip_name,"wb") as f:
-            f.write(r.content)
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+
+        with open(zip_name, "wb") as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
     except Exception as e:
         return {}, [
     f"URL: {url}",
@@ -276,7 +280,7 @@ def main():
         st.code(os.getcwd())
 
         st.write("Files:")
-        st.write(os.listdir("."))
+        st.write(os.listdir(base_dir))
 
         st.stop()
     # --- Phase 2: User Interface Structure ---
