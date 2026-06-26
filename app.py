@@ -39,18 +39,18 @@ def load_database():
     # ---> PASTE YOUR LINK BETWEEN THE QUOTES BELOW <---
     url = "https://github.com/Orthodox112/Song-Identifier/releases/download/v1.0/song_db.zip" 
         
-        try:
-            # This downloads the file to the Streamlit server
-            r = requests.get(url)
-            r.raise_for_status()
-            with open(zip_name,"wb") as f:
-                f.write(r.content)
-        except Exception as e:
-            return {}, [
+    try:
+        # This downloads the file to the Streamlit server
+        r = requests.get(url)
+        r.raise_for_status()
+        with open(zip_name,"wb") as f:
+            f.write(r.content)
+    except Exception as e:
+        return {}, [
     f"URL: {url}",
     f"Exists: {os.path.exists(zip_name)}",
     f"Download Error: {repr(e)}"
-]
+    ]
 
     # 3. Read the database directly from the downloaded ZIP in Memory
     try:
