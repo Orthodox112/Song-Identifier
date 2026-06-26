@@ -29,6 +29,10 @@ def load_database(db_path="song_db.pkl"):
 # Load the database globally for the app
 song_db = load_database()
 
+# Safety net: If the file was corrupted/empty and returned None, force it to be an empty dictionary
+if not isinstance(song_db, dict):
+    song_db = {}
+
 # --- Core Functions from Q3.ipynb ---
 
 def compute_spectrogram(audio_path=None, y=None, sr=None, window_length=2048, hop_length=512, max_freq=3500):
