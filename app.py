@@ -265,10 +265,7 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     with st.spinner("Loading database..."):
         song_db, debug_info = load_database()
-    st.write("Base directory:", base_dir)
-    st.write("ZIP path:", zip_name)
-    st.write("Current working directory:", os.getcwd())
-    st.write("ZIP exists:", os.path.exists(zip_name))
+        
     if not song_db:
         st.error("Database could not be loaded.")
 
