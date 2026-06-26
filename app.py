@@ -3,6 +3,7 @@ import gc
 import glob
 import pickle
 import zipfile
+import urllib.request  # <--- NEW: Allows us to download files directly!
 import numpy as np
 import scipy.ndimage
 import scipy.signal
@@ -18,12 +19,10 @@ st.set_page_config(page_title="EE200 Song Identifier", layout="wide")
 @st.cache_resource
 def load_database():
     db_name = "song_db.pkl"
-    zip_name = "song_db.zip"
+    zip_name = "downloaded_song_db.zip"
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    error_logs = []
 
-    # 1. Search for a valid raw .pkl file
+    # 1. LOCAL TESTING: Try to load the .pkl normally (for when you run on your laptop)
     for root, dirs, files in os.walk(base_dir):
         if db_name in files:
             filepath = os.path.join(root, db_name)
@@ -32,27 +31,36 @@ def load_database():
                     data = pickle.load(f)
                     if isinstance(data, dict): 
                         return data, []
-            except Exception as e:
-                # Catch the EXACT reason it failed!
-                error_logs.append(f"PKL File Error: {type(e).__name__} - {e}")
+            except Exception:
+                pass # Ignore errors locally, move to the cloud download step
 
-    # 2. Extract directly from Memory
-    for root, dirs, files in os.walk(base_dir):
-        if zip_name in files:
-            zip_path = os.path.join(root, zip_name)
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    for file_inside_zip in zip_ref.namelist():
-                        if file_inside_zip.endswith('.pkl'):
-                            with zip_ref.open(file_inside_zip) as f:
-                                data = pickle.load(f)
-                                if isinstance(data, dict):
-                                    return data, []
-            except Exception as e:
-                # Catch the EXACT reason the zip failed!
-                error_logs.append(f"ZIP File Error: {type(e).__name__} - {e}")
+    # 2. CLOUD DEPLOYMENT: Download the real zip directly from your GitHub Release
+    # ---> PASTE YOUR LINK BETWEEN THE QUOTES BELOW <---
+    url = "https://github.com/Orthodox112/Song-Identifier/releases/download/v1.0/song_db.zip" 
     
-    return {}, error_logs
+    if not os.path.exists(zip_name):
+        if url == "PASTE_YOUR_GITHUB_RELEASE_LINK_HERE":
+            return {}, ["⚠️ URL MISSING: Please paste your GitHub Release link into app.py!"]
+        
+        try:
+            # This downloads the file to the Streamlit server
+            urllib.request.urlretrieve(url, zip_name)
+        except Exception as e:
+            return {}, [f"Download Error: {e}"]
+
+    # 3. Read the database directly from the downloaded ZIP in Memory
+    try:
+        with zipfile.ZipFile(zip_name, 'r') as zip_ref:
+            for file_inside_zip in zip_ref.namelist():
+                if file_inside_zip.endswith('.pkl'):
+                    with zip_ref.open(file_inside_zip) as f:
+                        data = pickle.load(f)
+                        if isinstance(data, dict):
+                            return data, []
+    except Exception as e:
+        return {}, [f"Extraction Error: {type(e).__name__} - {e}"]
+    
+    return {}, ["Failed to find a valid dictionary inside the downloaded zip."]
 
 # Safely initialize the global database
 song_db, debug_info = load_database()
