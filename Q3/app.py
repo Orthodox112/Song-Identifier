@@ -17,15 +17,36 @@ st.set_page_config(page_title="EE200 Song Identifier", layout="wide")
 
 # Database Caching: Load the database only once into memory
 @st.cache_resource
-def load_database(db_path="song_db.pkl"):
-    if os.path.exists(db_path):
-        with open(db_path, 'rb') as f:
-            database = pickle.load(f)
-        return database
-    else:
-        st.error(f"Database file '{db_path}' not found! Please index the library first.")
-        return {}
+def load_database():
+    db_name = "song_db.pkl"
+    zip_name = "song_db.zip"
 
+    # 1. Search the entire directory tree just in case it's hiding in a sub-folder
+    for root, dirs, files in os.walk("."):
+        if db_name in files:
+            filepath = os.path.join(root, db_name)
+            with open(filepath, 'rb') as f:
+                return pickle.load(f)
+
+    # 2. If not found, try to extract the zip if it exists
+    if os.path.exists(zip_name):
+        with zipfile.ZipFile(zip_name, 'r') as zip_ref:
+            zip_ref.extractall(".")
+            
+        # Search again after extracting
+        for root, dirs, files in os.walk("."):
+            if db_name in files:
+                filepath = os.path.join(root, db_name)
+                with open(filepath, 'rb') as f:
+                    return pickle.load(f)
+
+    # 3. If it completely fails, this will display the server's files on your screen
+    # so we know exactly what Streamlit is seeing!
+    st.error(f"Could not find '{db_name}' or '{zip_name}'!")
+    st.write("Here are the files Streamlit currently sees on the server:")
+    st.write(os.listdir("."))
+    
+    return {}
 # Load the database globally for the app
 song_db = load_database()
 
