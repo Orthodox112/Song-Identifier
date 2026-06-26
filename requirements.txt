@@ -6,4 +6,8 @@ librosa==0.10.1
 soundfile
 audioread
 requests
+decorator
 lazy_loader
+msgpack
+pooch
+scikit-learn
