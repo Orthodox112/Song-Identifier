@@ -265,7 +265,7 @@ def main():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     with st.spinner("Loading database..."):
         song_db, debug_info = load_database()
-        
+
     if not song_db:
         st.error("Database could not be loaded.")
 
@@ -279,8 +279,6 @@ def main():
         st.write(os.listdir("."))
 
         st.stop()
-
-    
     # --- Phase 2: User Interface Structure ---
     # Create the three tabs as required by the project specifications
     tab_library, tab_identify, tab_batch = st.tabs(["LIBRARY", "IDENTIFY", "BATCH"])
