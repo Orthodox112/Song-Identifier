@@ -2,6 +2,7 @@ import os
 import gc
 import glob
 import pickle
+import zipfile
 import numpy as np
 import scipy.ndimage
 import scipy.signal
@@ -12,27 +13,50 @@ import streamlit as st
 
 # --- Phase 1: Application Setup and Backend Integration ---
 
-# Page Configuration for wide layout and dark theme compatibility
 st.set_page_config(page_title="EE200 Song Identifier", layout="wide")
 
-# Database Caching: Load the database only once into memory
 @st.cache_resource
-def load_database(db_path="song_db.pkl"):
-    if os.path.exists(db_path):
-        with open(db_path, 'rb') as f:
-            database = pickle.load(f)
-        return database
-    else:
-        st.error(f"Database file '{db_path}' not found! Please index the library first.")
-        return {}
+def load_database():
+    db_name = "song_db.pkl"
+    zip_name = "song_db.zip"
+    
+    # Find the absolute path to the directory containing app.py on the cloud server
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
-# Load the database globally for the app
+    # 1. Search the directory tree for the raw .pkl file
+    for root, dirs, files in os.walk(base_dir):
+        if db_name in files:
+            filepath = os.path.join(root, db_name)
+            try:
+                with open(filepath, 'rb') as f:
+                    return pickle.load(f)
+            except Exception:
+                pass # Ignore broken Git LFS pointers and keep searching
+
+    # 2. Try to extract the zip if it exists
+    for root, dirs, files in os.walk(base_dir):
+        if zip_name in files:
+            zip_path = os.path.join(root, zip_name)
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(base_dir)
+                    
+                # Search again after extracting
+                for ex_root, ex_dirs, ex_files in os.walk(base_dir):
+                    if db_name in ex_files:
+                        filepath = os.path.join(ex_root, db_name)
+                        with open(filepath, 'rb') as f:
+                            return pickle.load(f)
+            except Exception:
+                pass
+    
+    # 3. FATAL ERROR PREVENTER: Always return a dictionary if all else fails!
+    return {}
+
+# Safely initialize the global database
 song_db = load_database()
-
-# Safety net: If the file was corrupted/empty and returned None, force it to be an empty dictionary
 if not isinstance(song_db, dict):
     song_db = {}
-
 # --- Core Functions from Q3.ipynb ---
 
 def compute_spectrogram(audio_path=None, y=None, sr=None, window_length=2048, hop_length=512, max_freq=3500):
@@ -235,7 +259,19 @@ def main():
         st.header("Indexed Song Library")
         
         if not song_db:
-            st.warning("Database is empty or 'song_db.pkl' is missing from the directory.")
+            st.error("Database is missing! 'song_db.zip' was not found or failed to load.")
+            
+            # --- DEBUGGER: See what files are actually on the server ---
+            st.warning("Server File Debugger: Here are the files Streamlit currently sees:")
+            server_files = []
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            for root, dirs, files in os.walk(base_dir):
+                for file in files:
+                    # Ignore hidden git/python system files to keep the list clean
+                    if ".git" not in root and "__pycache__" not in root:
+                        server_files.append(os.path.join(root, file).replace(base_dir, ""))
+            st.write(server_files)
+            # -----------------------------------------------------------
         else:
             # Calculate the total number of hashes for each song in the database
             song_hash_counts = {}
@@ -243,26 +279,20 @@ def main():
                 for song_name, _ in occurrences:
                     song_hash_counts[song_name] = song_hash_counts.get(song_name, 0) + 1
             
-            # Create a responsive grid layout (3 columns)
             cols = st.columns(3) 
             col_idx = 0
-            
-            # Populate the grid with song titles and their hash counts
-            # Replace your current grid loop in the LIBRARY tab with this:
             for song_name, count in sorted(song_hash_counts.items()):
                 with cols[col_idx % 3]:
                     with st.container(border=True):
                         st.subheader(song_name)
                         st.write(f"**{count:,}** hashes")
                         
-                        # Dynamically load the image based on the song name
                         image_path = f"fingerprints/{song_name}.png"
                         if os.path.exists(image_path):
                             st.image(image_path, use_container_width=True)
                         else:
                             st.caption("Visual footprint unavailable.")
                 col_idx += 1
-
     # --- Phase 4: Building the 'IDENTIFY' Tab --
     with tab_identify:
         st.header("Audio Fingerprinting Engine")
