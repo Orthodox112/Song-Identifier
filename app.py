@@ -3,6 +3,7 @@ import gc
 import glob
 import pickle
 import zipfile
+import requests
 import urllib.request  # <--- NEW: Allows us to download files directly!
 import numpy as np
 import scipy.ndimage
@@ -19,7 +20,7 @@ st.set_page_config(page_title="EE200 Song Identifier", layout="wide")
 @st.cache_resource
 def load_database():
     db_name = "song_db.pkl"
-    zip_name = "downloaded_song_db.zip"
+    zip_name = os.path.join(base_dir,"song_db.zip")
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # 1. LOCAL TESTING: Try to load the .pkl normally (for when you run on your laptop)
@@ -31,22 +32,25 @@ def load_database():
                     data = pickle.load(f)
                     if isinstance(data, dict): 
                         return data, []
-            except Exception:
-                pass # Ignore errors locally, move to the cloud download step
+            except Exception as e:
+                return {}, [str(e)]# Ignore errors locally, move to the cloud download step
 
     # 2. CLOUD DEPLOYMENT: Download the real zip directly from your GitHub Release
     # ---> PASTE YOUR LINK BETWEEN THE QUOTES BELOW <---
     url = "https://github.com/Orthodox112/Song-Identifier/releases/download/v1.0/song_db.zip" 
-    
-    if not os.path.exists(zip_name):
-        if url == "PASTE_YOUR_GITHUB_RELEASE_LINK_HERE":
-            return {}, ["⚠️ URL MISSING: Please paste your GitHub Release link into app.py!"]
         
         try:
             # This downloads the file to the Streamlit server
-            urllib.request.urlretrieve(url, zip_name)
+            r = requests.get(url)
+            r.raise_for_status()
+            with open(zip_name,"wb") as f:
+                f.write(r.content)
         except Exception as e:
-            return {}, [f"Download Error: {e}"]
+            return {}, [
+    f"URL: {url}",
+    f"Exists: {os.path.exists(zip_name)}",
+    f"Download Error: {repr(e)}"
+]
 
     # 3. Read the database directly from the downloaded ZIP in Memory
     try:
@@ -63,9 +67,9 @@ def load_database():
     return {}, ["Failed to find a valid dictionary inside the downloaded zip."]
 
 # Safely initialize the global database
-song_db, debug_info = load_database()
-if not isinstance(song_db, dict):
-    song_db = {}
+# song_db, debug_info = load_database()
+# if not isinstance(song_db, dict):
+#     song_db = {}
 # --- Core Functions from Q3.ipynb ---
 
 def compute_spectrogram(audio_path=None, y=None, sr=None, window_length=2048, hop_length=512, max_freq=3500):
@@ -122,7 +126,6 @@ def extract_peaks(spectrogram, freq_bins, time_bins, amp_threshold=-15, neighbor
     
     # Apply thresholds
     peaks_mask = local_max ^ eroded_background
-    amplitudes = spectrogram[peaks_mask]
     
     # Get peak coordinates
     freq_idx, time_idx = np.where(peaks_mask & (spectrogram > amp_threshold))
@@ -256,8 +259,34 @@ def plot_histogram(offsets, prediction):
     return fig
 
 # Main function structure
+@st.cache_resource
+def get_database():
+    return load_database()
+
+
 def main():
-    st.title("EE200: Audio Fingerprinting & Song Identification")
+
+    st.title("EE200 Song Identifier")
+
+    with st.spinner("Loading database..."):
+        song_db, debug_info = get_database()
+
+    if not song_db:
+        st.error("Database could not be loaded.")
+
+        for err in debug_info:
+            st.code(err)
+
+        st.write("Current directory:")
+        st.code(os.getcwd())
+
+        st.write("Files:")
+        st.write(os.listdir("."))
+
+        st.stop()
+
+    # Create tabs only AFTER database loads
+    tab1, tab2, tab3 = st.tabs([...])
     
     # --- Phase 2: User Interface Structure ---
     # Create the three tabs as required by the project specifications
@@ -299,7 +328,7 @@ def main():
                         st.subheader(song_name)
                         st.write(f"**{count:,}** hashes")
                         
-                        image_path = f"fingerprints/{song_name}.png"
+                        image_path = os.path.join(base_dir, "fingerprints", f"{song_name}.png")
                         if os.path.exists(image_path):
                             st.image(image_path, use_container_width=True)
                         else:
