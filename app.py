@@ -20,39 +20,41 @@ def load_database():
     db_name = "song_db.pkl"
     zip_name = "song_db.zip"
     
-    # Find the absolute path to the directory containing app.py on the cloud server
+    # Find the absolute path to the directory containing app.py
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
-    # 1. Search the directory tree for the raw .pkl file
+    # 1. Search for a valid raw .pkl file (This handles your local testing)
     for root, dirs, files in os.walk(base_dir):
         if db_name in files:
             filepath = os.path.join(root, db_name)
             try:
                 with open(filepath, 'rb') as f:
-                    return pickle.load(f)
+                    data = pickle.load(f)
+                    # Verify it's not a broken LFS pointer
+                    if isinstance(data, dict): 
+                        return data
             except Exception:
-                pass # Ignore broken Git LFS pointers and keep searching
+                continue # Ignore broken Git LFS pointers and keep searching
 
-    # 2. Try to extract the zip if it exists
+    # 2. Extract directly from Memory (This bypasses the Cloud's Read-Only block!)
     for root, dirs, files in os.walk(base_dir):
         if zip_name in files:
             zip_path = os.path.join(root, zip_name)
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(base_dir)
-                    
-                # Search again after extracting
-                for ex_root, ex_dirs, ex_files in os.walk(base_dir):
-                    if db_name in ex_files:
-                        filepath = os.path.join(ex_root, db_name)
-                        with open(filepath, 'rb') as f:
-                            return pickle.load(f)
+                    # Look inside the zip to find the exact file name and path
+                    for file_inside_zip in zip_ref.namelist():
+                        if file_inside_zip.endswith(db_name):
+                            # Read the file directly out of the zip into RAM!
+                            with zip_ref.open(file_inside_zip) as f:
+                                data = pickle.load(f)
+                                if isinstance(data, dict):
+                                    return data
             except Exception:
-                pass
+                continue
     
-    # 3. FATAL ERROR PREVENTER: Always return a dictionary if all else fails!
+    # 3. FATAL ERROR PREVENTER
     return {}
-
 # Safely initialize the global database
 song_db = load_database()
 if not isinstance(song_db, dict):
